@@ -113,24 +113,96 @@ export function computeOffenseSummary(
 ): OffenseSummary {
   const agility = combinedStats.agility ?? 0;
 
-  // Attack speed formula (tunable)
+  /**
+   * Attacks per second formula:
+   *  - Base 1.0
+   *  - +0.01 per point of agility
+   * This is tunable later.
+   */
   const baseAps = 1.0;
-  const aps = baseAps + agility * 0.01;
+  const attacksPerSecond = baseAps + agility * 0.01;
 
-  // Basic hit (no headshot, no backstab, etc.)
-  const basicContext: HitContext = {
+  // Define 3 hit contexts: body, headshot, backstab.
+  const bodyContext: HitContext = {
     isHeadshot: false,
     isBackstab: false,
   };
+  const headshotContext: HitContext = {
+    isHeadshot: true,
+    isBackstab: false,
+  };
+  const backstabContext: HitContext = {
+    isHeadshot: false,
+    isBackstab: true,
+  };
 
-  const damagePerHitPreArmor = computeDamagePerHit(build, undefined, basicContext);
-  const damagePerHitVsEnemy   = computeDamagePerHit(build, enemy, basicContext);
+  /**
+   * Damage per hit, pre-armor (enemy = undefined).
+   * We call the same pipeline but skip armor reduction by not passing an enemy.
+   */
+  const bodyDamagePerHitPreArmor = computeDamagePerHit(
+    build,
+    undefined,
+    bodyContext,
+  );
+  const headDamagePerHitPreArmor = computeDamagePerHit(
+    build,
+    undefined,
+    headshotContext,
+  );
+  const backstabDamagePerHitPreArmor = computeDamagePerHit(
+    build,
+    undefined,
+    backstabContext,
+  );
+
+  // Damage per hit vs enemy (includes armor)
+  const bodyDamagePerHitVsEnemy = computeDamagePerHit(
+    build,
+    enemy,
+    bodyContext,
+  );
+  const headDamagePerHitVsEnemy = computeDamagePerHit(
+    build,
+    enemy,
+    headshotContext,
+  );
+  const backstabDamagePerHitVsEnemy = computeDamagePerHit(
+    build,
+    enemy,
+    backstabContext,
+  );
+
+  // Convert per-hit numbers into DPS numbers with APS.
+  const bodyDps = bodyDamagePerHitPreArmor * attacksPerSecond;
+  const headshotDps = headDamagePerHitPreArmor * attacksPerSecond;
+  const backstabDps = backstabDamagePerHitPreArmor * attacksPerSecond;
+
+  const bodyDpsVsEnemy = bodyDamagePerHitVsEnemy * attacksPerSecond;
+  const headshotDpsVsEnemy = headDamagePerHitVsEnemy * attacksPerSecond;
+  const backstabDpsVsEnemy = backstabDamagePerHitVsEnemy * attacksPerSecond;
+
+  /**
+   * For backward compatibility / general usage:
+   * - weaponDamagePerHit: we treat it as "body pre-armor" baseline
+   * - approxDps: same baseline DPS
+   * - dpsVsEnemy: body DPS vs enemy
+   */
+  const weaponDamagePerHit = bodyDamagePerHitPreArmor;
+  const approxDps = bodyDps;
+  const dpsVsEnemy = bodyDpsVsEnemy;
 
   return {
-    weaponDamagePerHit: damagePerHitPreArmor,
-    attacksPerSecond: aps,
-    approxDps: damagePerHitPreArmor * aps,
-    dpsVsEnemy: damagePerHitVsEnemy * aps,
+    weaponDamagePerHit,
+    attacksPerSecond,
+    approxDps,
+    dpsVsEnemy,
+    bodyDps,
+    headshotDps,
+    backstabDps,
+    bodyDpsVsEnemy,
+    headshotDpsVsEnemy,
+    backstabDpsVsEnemy,
   };
 }
 

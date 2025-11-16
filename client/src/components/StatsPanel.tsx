@@ -19,13 +19,14 @@ interface StatsPanelProps {
  * This panel now:
  * - Lets the user choose an enemy profile
  * - Calls the engine to compute DerivedStats
- * - Shows DPS and TTK vs that enemy
+ * - Shows DPS and TTK vs that enemy for body/head/backstab profiles
  */
 export function StatsPanel({ build, onTargetEnemyChange }: StatsPanelProps) {
-  // Call our pure calculation engine.
+  // 1. Compute derived stats from the engine
   const derived: DerivedStats = computeDerivedStats(build);
   const { combinedStats, defense, offense } = derived;
 
+  // 2. Resolve enemy
   const enemy = getEnemyById(build.targetEnemyId);
 
   const handleEnemySelectChange = (
@@ -35,10 +36,21 @@ export function StatsPanel({ build, onTargetEnemyChange }: StatsPanelProps) {
     onTargetEnemyChange(value === '' ? null : value);
   };
 
-  // Compute a very simple "time to kill" if we have an enemy and DPS > 0
-  let timeToKillSeconds: number | null = null;
-  if (enemy && offense.dpsVsEnemy > 0) {
-    timeToKillSeconds = enemy.maxHealth / offense.dpsVsEnemy;
+  // 3. Compute simple TTKs for each profile (if we have enemy + DPS > 0)
+  let ttkBody: number | null = null;
+  let ttkHead: number | null = null;
+  let ttkBackstab: number | null = null;
+
+  if (enemy) {
+    if (offense.bodyDpsVsEnemy > 0) {
+      ttkBody = enemy.maxHealth / offense.bodyDpsVsEnemy;
+    }
+    if (offense.headshotDpsVsEnemy > 0) {
+      ttkHead = enemy.maxHealth / offense.headshotDpsVsEnemy;
+    }
+    if (offense.backstabDpsVsEnemy > 0) {
+      ttkBackstab = enemy.maxHealth / offense.backstabDpsVsEnemy;
+    }
   }
 
   return (
@@ -114,34 +126,127 @@ export function StatsPanel({ build, onTargetEnemyChange }: StatsPanelProps) {
       {/* Offense */}
       <section>
         <h3>Offense</h3>
+
+        {/* Summary (backwards-compatible fields) */}
         <ul style={{ listStyle: 'none', paddingLeft: 0, fontSize: '0.9rem' }}>
           <li>
-            Weapon Damage / Hit (pre-armor):{' '}
+            Weapon Damage / Hit (body, pre-armor):{' '}
             {offense.weaponDamagePerHit.toFixed(1)}
           </li>
           <li>Attacks per Second: {offense.attacksPerSecond.toFixed(2)}</li>
-          <li>Approx DPS (pre-armor): {offense.approxDps.toFixed(1)}</li>
+          <li>Approx DPS (body, pre-armor): {offense.approxDps.toFixed(1)}</li>
           {enemy && (
-            <>
-              <li>
-                DPS vs {enemy.name}:{' '}
-                {offense.dpsVsEnemy.toFixed(1)}
-              </li>
-              {timeToKillSeconds !== null && (
-                <li>
-                  TTK vs {enemy.name}:{' '}
-                  {timeToKillSeconds.toFixed(2)}s
-                </li>
-              )}
-            </>
+            <li>
+              DPS vs {enemy.name} (body):{' '}
+              {offense.dpsVsEnemy.toFixed(1)}
+            </li>
           )}
         </ul>
+
+        {/* DPS breakdown */}
+        <div style={{ marginTop: '0.5rem' }}>
+          <h4 style={{ marginBottom: '0.25rem' }}>DPS Breakdown (Pre-Armor)</h4>
+          <ul
+            style={{
+              listStyle: 'none',
+              paddingLeft: 0,
+              fontSize: '0.85rem',
+            }}
+          >
+            <li>Body DPS: {offense.bodyDps.toFixed(1)}</li>
+            <li>Headshot DPS: {offense.headshotDps.toFixed(1)}</li>
+            <li>Backstab DPS: {offense.backstabDps.toFixed(1)}</li>
+          </ul>
+        </div>
+
+        {/* DPS vs enemy breakdown + TTKs */}
+        {enemy && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <h4 style={{ marginBottom: '0.25rem' }}>
+              DPS vs {enemy.name} &amp; TTK
+            </h4>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '0.85rem',
+              }}
+            >
+              <thead>
+                <tr>
+                  <th
+                    style={{
+                      textAlign: 'left',
+                      borderBottom: '1px solid #444',
+                      paddingBottom: '0.25rem',
+                    }}
+                  >
+                    Profile
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'right',
+                      borderBottom: '1px solid #444',
+                      paddingBottom: '0.25rem',
+                    }}
+                  >
+                    DPS vs Enemy
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'right',
+                      borderBottom: '1px solid #444',
+                      paddingBottom: '0.25rem',
+                    }}
+                  >
+                    TTK (s)
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Body</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {offense.bodyDpsVsEnemy.toFixed(1)}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {ttkBody !== null ? ttkBody.toFixed(2) : '—'}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Headshot</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {offense.headshotDpsVsEnemy.toFixed(1)}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {ttkHead !== null ? ttkHead.toFixed(2) : '—'}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Backstab</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {offense.backstabDpsVsEnemy.toFixed(1)}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {ttkBackstab !== null ? ttkBackstab.toFixed(2) : '—'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
-      <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.75rem' }}>
-        Formulas are placeholder approximations. The important part is that all math
-        lives in <code>src/engine/</code>, so you can refine it as you learn more
-        about the game without touching the UI.
+      <p
+        style={{
+          fontSize: '0.8rem',
+          opacity: 0.7,
+          marginTop: '0.75rem',
+        }}
+      >
+        Formulas are placeholder approximations. All math lives in{' '}
+        <code>src/engine/</code>, so you can refine it as you learn more about
+        the game without touching the UI.
       </p>
     </div>
   );

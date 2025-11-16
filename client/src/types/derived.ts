@@ -31,15 +31,37 @@ export interface DefenseSummary {
  * - DPS vs a given enemy profile, etc.
  */
 export interface OffenseSummary {
-  /** Damage per hit before enemy armor reduction */
+  /** Damage per hit before enemy armor (body shot) */
   weaponDamagePerHit: number;
+
   /** Attacks per second */
   attacksPerSecond: number;
-  /** Simple DPS before armor */
+
+  /** Simple DPS for baseline (body, pre-armor) */
   approxDps: number;
-  /** DPS against the current target enemy, taking armor into account */
+
+  /** DPS vs selected enemy (body shots) */
   dpsVsEnemy: number;
+
+  /** DPS if we assume body shots only, pre-armor */
+  bodyDps: number;
+
+  /** DPS if we assume headshots only, pre-armor */
+  headshotDps: number;
+
+  /** DPS if we assume backstabs only, pre-armor */
+  backstabDps: number;
+
+  /** DPS vs enemy assuming body shots */
+  bodyDpsVsEnemy: number;
+
+  /** DPS vs enemy assuming headshots */
+  headshotDpsVsEnemy: number;
+
+  /** DPS vs enemy assuming backstabs */
+  backstabDpsVsEnemy: number;
 }
+
 /**
  * The full derived stats set we might want to show in the UI.
  */
