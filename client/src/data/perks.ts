@@ -1,35 +1,12 @@
 // src/data/perks.ts
 
 import type { Perk } from '../types/build';
+import rawPerks from './patches/0.1.0/perks.json';
 
 /**
- * Example perk data.
- * In a real project, you'll generate this from external data or keep a patch-specific file.
+ * Perks for the current patch version.
  */
-export const PERKS: Perk[] = [
-  {
-    id: 'mighty-strikes',
-    name: 'Mighty Strikes',
-    description: 'Increases physical weapon damage by 10%.',
-    physicalDamageMultiplier: 1.10,
-    appliesToDamageType: 'physical',
-  },
-  {
-    id: 'sharpshooter',
-    name: 'Sharpshooter',
-    description: 'Increases headshot damage with bows by 25%.',
-    headshotDamageMultiplier: 1.25,
-    appliesToWeaponTag: 'bow',
-  },
-  {
-    id: 'thick-skin',
-    name: 'Thick Skin',
-    description: 'Grants +20 health.',
-    statBonuses: {
-      health: 20,
-    },
-  },
-];
+export const PERKS: Perk[] = rawPerks as Perk[];
 
 /**
  * Helper to look up a perk by ID.

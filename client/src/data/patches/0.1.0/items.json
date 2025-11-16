@@ -1,0 +1,35 @@
+[
+  {
+    "id": "longsword-common",
+    "name": "Common Longsword",
+    "slot": "weaponMain",
+    "rarity": "common",
+    "baseWeaponDamage": 35,
+    "weaponDamageType": "physical",
+    "strengthScaling": 0.5,
+    "tags": ["weapon", "sword", "melee"],
+    "statBonuses": {
+      "strength": 1
+    }
+  },
+  {
+    "id": "rusty-helmet",
+    "name": "Rusty Helmet",
+    "slot": "helmet",
+    "rarity": "common",
+    "baseArmor": 10,
+    "tags": ["armor", "plate"],
+    "statBonuses": {
+      "health": 5
+    }
+  },
+  {
+    "id": "leather-boots",
+    "name": "Leather Boots",
+    "slot": "boots",
+    "rarity": "common",
+    "baseArmor": 5,
+    "tags": ["armor", "leather"]
+  }
+]
+

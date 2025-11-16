@@ -1,0 +1,21 @@
+[
+  {
+    "id": "dummy-light",
+    "name": "Training Dummy (Light Armor)",
+    "maxHealth": 100,
+    "armorRating": 10
+  },
+  {
+    "id": "dummy-medium",
+    "name": "Training Dummy (Medium Armor)",
+    "maxHealth": 120,
+    "armorRating": 40
+  },
+  {
+    "id": "dummy-heavy",
+    "name": "Training Dummy (Heavy Armor)",
+    "maxHealth": 140,
+    "armorRating": 70
+  }
+]
+

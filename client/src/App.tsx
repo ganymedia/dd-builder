@@ -53,6 +53,7 @@ function createEmptyBuild(): Build {
   return {
     id: generateBuildId(),
     name: 'New Build',
+    gameVersion: '0.1.0',
     classId: 'fighter',
     baseStats,
     equippedItems: {},

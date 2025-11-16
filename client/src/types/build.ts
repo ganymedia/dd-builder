@@ -8,6 +8,11 @@
  * These are erased at compile time; they exist only to help us while coding.
  */
 
+/** Game Version Field
+ * Modify whenever version changes for tracking and managing data validity
+ */
+export type GameVersion = '0.1.0';
+
 /**
  * All the primary stat names we care about.
  * Using a union of string literals gives us strong autocomplete & type safety.
@@ -158,39 +163,16 @@ export interface EnemyProfile {
  * It is our core entity – all calculations will be based on this.
  */
 export interface Build {
-  id: string;        // For local identification (e.g. timestamps or random IDs)
-  name: string;      // Friendly name for the build
-  classId: ClassId;  // Which class this build belongs to
+  id: string;
+  name: string;
 
-  /**
-   * Base stats before gear/perks/effects.
-   * We keep this as a map for flexibility; you can also break this out
-   * into named fields (e.g., baseStrength, baseAgility) if you prefer.
-   */
+  /** Game version this build was created for. */
+  gameVersion?: GameVersion;
+
+  classId: ClassId;
   baseStats: StatMap;
-
-  /**
-   * Currently equipped items.
-   * We use a partial mapping: slots may or may not have items equipped.
-   * Example:
-   *  equippedItems.weaponMain = someSwordItem
-   */
   equippedItems: Partial<Record<ItemSlot, Item>>;
-
-  /**
-   * Selected perks for this build.
-   */
   perks: Perk[];
-
-  /**
-   * Any active buffs or debuffs you want to simulate.
-   * For MVP, you can leave this empty.
-   */
   activeStatusEffects: StatusEffect[];
-
-  /**
-   * Which enemy profile we’re calculating against.
-   * This can be optional for now; we’ll wire it up later.
-   */
   targetEnemyId?: string;
 }
