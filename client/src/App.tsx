@@ -1,27 +1,44 @@
 // src/App.tsx
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './App.css';
 import './components/Layout.css';
 
-// Import our types
 import type { Build, ClassId, StatMap, ItemSlot } from './types/build';
-
-// Data Helpers
 import { getItemById } from './data/items';
+import { getPerkById } from './data/perks';
 
-// Import our layout components
 import { Layout } from './components/Layout';
 import { CharacterConfigPanel } from './components/CharacterConfigPanel';
 import { GearPanel } from './components/GearPanel';
 import { StatsPanel } from './components/StatsPanel';
-import { getPerkById } from './data/perks';
+import { BuildManagerBar } from './components/BuildManagerBar';
 
-export default App;
+import {
+  loadBuildsFromStorage,
+  saveBuildsToStorage,
+  exportBuildToJson,
+  importBuildFromJson,
+} from './services/buildStorage';
+
+interface BuildState {
+  builds: Build[];
+  currentBuildId: string;
+}
 
 /**
- * This helper creates a very simple "empty" build.
- * In a real app, you'd probably have one per class with default stats.
+ * Utility: generate a reasonably unique build ID.
+ */
+function generateBuildId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    // @ts-expect-error - TS might not know randomUUID on older libs
+    return crypto.randomUUID();
+  }
+  return `build-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+}
+
+/**
+ * Create a brand-new empty build.
  */
 function createEmptyBuild(): Build {
   const baseStats: StatMap = {
@@ -34,44 +51,84 @@ function createEmptyBuild(): Build {
   };
 
   return {
-    id: 'local-1',
+    id: generateBuildId(),
     name: 'New Build',
     classId: 'fighter',
     baseStats,
     equippedItems: {},
     perks: [],
     activeStatusEffects: [],
+    targetEnemyId: undefined,
   };
 }
 
 function App() {
   /**
-   * React's useState hook:
-   * - Returns a pair: [currentValue, setterFunction]
-   * - When you call setterFunction(newValue), React re-renders the component.
-   *
-   * Here, our state is the current "Build" we are editing.
-   * `Build` is the TypeScript interface we defined earlier.
+   * BuildState holds a list of builds and which one is currently active.
+   * We initialize from localStorage if possible; otherwise we create a new build.
    */
-  const [build, setBuild] = useState<Build>(createEmptyBuild());
+  const [buildState, setBuildState] = useState<BuildState>(() => {
+    const loaded = loadBuildsFromStorage();
+    if (loaded.length > 0) {
+      return {
+        builds: loaded,
+        currentBuildId: loaded[0].id,
+      };
+    }
+    const initial = createEmptyBuild();
+    return {
+      builds: [initial],
+      currentBuildId: initial.id,
+    };
+  });
+
+  const { builds, currentBuildId } = buildState;
+
+  // Convenience: derive the current build object.
+  const currentBuild: Build | undefined =
+    builds.find((b) => b.id === currentBuildId) ?? builds[0];
 
   /**
-   * Handler for when the user changes the class (e.g. Fighter -> Ranger).
-   * This function will be passed down to the CharacterConfigPanel.
+   * Persist builds to localStorage whenever the builds array changes.
    */
+  useEffect(() => {
+    saveBuildsToStorage(builds);
+  }, [builds]);
+
+  /**
+   * Helper to update the current build immutably.
+   * Accepts a function that takes the previous Build and returns a new one.
+   */
+  const updateCurrentBuild = (updater: (prev: Build) => Build) => {
+    setBuildState((prevState) => {
+      const idx = prevState.builds.findIndex(
+        (b) => b.id === prevState.currentBuildId,
+      );
+      if (idx === -1) return prevState;
+
+      const oldBuild = prevState.builds[idx];
+      const updated = updater(oldBuild);
+      const newBuilds = [...prevState.builds];
+      newBuilds[idx] = updated;
+
+      return {
+        ...prevState,
+        builds: newBuilds,
+      };
+    });
+  };
+
+  // ------------- Handlers for character + stats -------------
+
   const handleClassChange = (classId: ClassId) => {
-    setBuild((prev) => ({
+    updateCurrentBuild((prev) => ({
       ...prev,
       classId,
     }));
   };
 
-  /**
-   * Handler for when the user updates one of the base stats.
-   * `keyof StatMap` ensures we only accept a valid stat name.
-   */
   const handleBaseStatChange = (stat: keyof StatMap, value: number) => {
-    setBuild((prev) => ({
+    updateCurrentBuild((prev) => ({
       ...prev,
       baseStats: {
         ...prev.baseStats,
@@ -80,65 +137,17 @@ function App() {
     }));
   };
 
-  /**
-   * Toggle a perk on/off:
-   * - If it's in build.perks, remove it.
-   * - Otherwise, look it up in data and add it.
-   */
-  const handleTogglePerk = (perkId: string) => {
-    setBuild((prev) => {
-      const currentlySelected = prev.perks.some((p) => p.id === perkId);
+  // ------------- Handlers for gear + perks -------------
 
-      if (currentlySelected) {
-        // Remove the perk
-        return {
-          ...prev,
-          perks: prev.perks.filter((p) => p.id !== perkId),
-        };
-      }
-
-      const perk = getPerkById(perkId);
-      if (!perk) {
-        return prev; // unknown perk; no-op
-      }
-
-      return {
-        ...prev,
-        perks: [...prev.perks, perk],
-      };
-    });
-  };
-
-  /**
-   * Handler for when the user selects a target enemy in the StatsPanel.
-   * We store only the enemy ID in the build; the engine resolves it to a full profile.
-   */
-  const handleTargetEnemyChange = (enemyId: string | null) => {
-    setBuild((prev) => ({
-      ...prev,
-      targetEnemyId: enemyId ?? undefined,
-    }));
-  };
-  
-  /**
-   * Handler for equipping/unequipping items.
-   * - If itemId is null: remove any item currently in that slot.
-   * - If itemId is a string: look up the item in our data and equip it.
-   *
-   * Note: we store the full Item object in equippedItems for now.
-   * Later, you might choose to store just IDs and resolve them in the engine.
-   */
   const handleEquipItem = (slot: ItemSlot, itemId: string | null) => {
-    setBuild((prev) => {
+    updateCurrentBuild((prev) => {
       const newEquipped = { ...prev.equippedItems };
 
       if (itemId === null) {
-        // Unequip the item from this slot
         delete newEquipped[slot];
       } else {
         const item = getItemById(itemId);
         if (!item) {
-          // If item not found, we simply skip; in a real app, you'd log or warn.
           return prev;
         }
         newEquipped[slot] = item;
@@ -150,24 +159,161 @@ function App() {
       };
     });
   };
-  // For now, GearPanel and StatsPanel will be mostly placeholders with stubs.
-  // We still pass the build to show how data will flow.
+
+  const handleTogglePerk = (perkId: string) => {
+    updateCurrentBuild((prev) => {
+      const alreadyHas = prev.perks.some((p) => p.id === perkId);
+      if (alreadyHas) {
+        return {
+          ...prev,
+          perks: prev.perks.filter((p) => p.id !== perkId),
+        };
+      }
+
+      const perk = getPerkById(perkId);
+      if (!perk) return prev;
+
+      return {
+        ...prev,
+        perks: [...prev.perks, perk],
+      };
+    });
+  };
+
+  // ------------- Handler for enemy selection -------------
+
+  const handleTargetEnemyChange = (enemyId: string | null) => {
+    updateCurrentBuild((prev) => ({
+      ...prev,
+      targetEnemyId: enemyId ?? undefined,
+    }));
+  };
+
+  // ------------- Build manager handlers -------------
+
+  const handleSelectBuild = (buildId: string) => {
+    setBuildState((prev) => {
+      if (!prev.builds.some((b) => b.id === buildId)) return prev;
+      return {
+        ...prev,
+        currentBuildId: buildId,
+      };
+    });
+  };
+
+  const handleSaveAsNewBuild = () => {
+    if (!currentBuild) return;
+    const newBuild: Build = {
+      ...currentBuild,
+      id: generateBuildId(),
+      name: `${currentBuild.name} (copy)`,
+    };
+
+    setBuildState((prev) => ({
+      builds: [...prev.builds, newBuild],
+      currentBuildId: newBuild.id,
+    }));
+  };
+
+  const handleRenameCurrentBuild = (newName: string) => {
+    updateCurrentBuild((prev) => ({
+      ...prev,
+      name: newName,
+    }));
+  };
+
+  const handleDeleteCurrentBuild = () => {
+    setBuildState((prev) => {
+      // Don't allow deleting the last build
+      if (prev.builds.length <= 1) return prev;
+
+      const newBuilds = prev.builds.filter((b) => b.id !== prev.currentBuildId);
+      const newCurrentId = newBuilds[0]?.id ?? prev.currentBuildId;
+
+      return {
+        builds: newBuilds,
+        currentBuildId: newCurrentId,
+      };
+    });
+  };
+
+  /**
+   * Import build from JSON string.
+   * Returns { success, error? } so the UI can show messages.
+   */
+  const handleImportBuild = (
+    json: string,
+  ): { success: boolean; error?: string } => {
+    const imported = importBuildFromJson(json);
+    if (!imported) {
+      return { success: false, error: 'Invalid JSON or build format.' };
+    }
+
+    const newBuild: Build = {
+      ...imported,
+      // Ensure unique id regardless of what the JSON contains
+      id: generateBuildId(),
+      // Ensure a non-empty name
+      name: imported.name || 'Imported Build',
+    };
+
+    setBuildState((prev) => ({
+      builds: [...prev.builds, newBuild],
+      currentBuildId: newBuild.id,
+    }));
+
+    return { success: true };
+  };
+
+  /**
+   * Export current build as JSON (for copy-paste sharing).
+   */
+  const handleExportCurrentBuild = (): string => {
+    if (!currentBuild) return '';
+    return exportBuildToJson(currentBuild);
+  };
+
+  if (!currentBuild) {
+    return <div>Loading build data...</div>;
+  }
+
   return (
     <Layout>
-      <CharacterConfigPanel
-        build={build}
-        onClassChange={handleClassChange}
-        onBaseStatChange={handleBaseStatChange}
-      />
+      {/* LEFT COLUMN: Build Manager + Character Config */}
+      <div>
+        <BuildManagerBar
+          builds={builds}
+          currentBuildId={currentBuildId}
+          onSelectBuild={handleSelectBuild}
+          onSaveAsNew={handleSaveAsNewBuild}
+          onRenameCurrent={handleRenameCurrentBuild}
+          onDeleteCurrent={handleDeleteCurrentBuild}
+          onImportBuild={handleImportBuild}
+          onExportCurrent={handleExportCurrentBuild}
+        />
+        <hr style={{ margin: '0.5rem 0' }} />
+        <CharacterConfigPanel
+          build={currentBuild}
+          onClassChange={handleClassChange}
+          onBaseStatChange={handleBaseStatChange}
+        />
+      </div>
+
+      {/* MIDDLE COLUMN: Gear & Perks */}
       <GearPanel
-        build={build}
+        build={currentBuild}
         onEquipItem={handleEquipItem}
         onTogglePerk={handleTogglePerk}
       />
+
+      {/* RIGHT COLUMN: Stats */}
       <StatsPanel
-        build={build}
+        build={currentBuild}
         onTargetEnemyChange={handleTargetEnemyChange}
       />
     </Layout>
   );
-};
+}
+
+export default App;
+
